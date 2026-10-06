@@ -1,0 +1,2180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Grow While You Wait</title>
+    <meta
+      name="description"
+      content="An experiment in loading states: the growing plant is the progress indicator."
+    />
+    <meta name="theme-color" content="#F3EDE3" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              paper: "#F3EDE3",
+              ink: "#2A211B",
+              muted: "#8A7B6C",
+              poppy: "#B8432B",
+              "poppy-deep": "#8E2C1A",
+              moss: "#56703F",
+              cream: "#FBF3E8",
+            },
+            fontFamily: {
+              display: ['"Cormorant Garamond"', "Georgia", "serif"],
+              sans: ['"Instrument Sans"', "system-ui", "sans-serif"],
+              mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      :root {
+        --paper: #f3ede3;
+        --ink: #2a211b;
+        --muted: #8a7b6c;
+        --poppy: #b8432b;
+        --moss: #56703f;
+        --cream: #fbf3e8;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--paper);
+        color: var(--ink);
+      }
+      body {
+        font-family: "Instrument Sans", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .display {
+        font-family: "Cormorant Garamond", Georgia, serif;
+      }
+      .mono {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+      }
+
+      /* paper grain — tactile, not decorative */
+      .grain::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 1;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .16  0 0 0 0 .12  0 0 0 0 .09  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+        opacity: 0.16;
+        mix-blend-mode: multiply;
+      }
+      .loader-bg {
+        background: radial-gradient(120% 90% at 50% 42%, #f8f3ea 0%, #f3ede3 52%, #eae1d2 100%);
+      }
+
+      /* growing label */
+      .gw-label {
+        position: fixed;
+        left: 0;
+        top: 0;
+        text-align: center;
+        pointer-events: none;
+        white-space: nowrap;
+        will-change: transform;
+        z-index: 2;
+      }
+      .gw-label .word {
+        font-family: "Cormorant Garamond", serif;
+        font-style: italic;
+        font-size: 19px;
+        color: #5b4e43;
+      }
+      .gw-label .num {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12.5px;
+        color: var(--ink);
+        margin-left: 0.45em;
+        font-variant-numeric: tabular-nums;
+        display: inline-block;
+        min-width: 4ch;
+        text-align: left;
+      }
+      .gw-label .stage {
+        margin-top: 7px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 9.5px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #a09282;
+        transition: opacity 0.4s;
+      }
+
+      /* dev range */
+      .gw-range {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 28px;
+        background: transparent;
+        cursor: grab;
+      }
+      .gw-range:active {
+        cursor: grabbing;
+      }
+      .gw-range:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+      .gw-range::-webkit-slider-runnable-track {
+        height: 2px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--moss) var(--v), rgba(42, 33, 27, 0.16) var(--v));
+      }
+      .gw-range::-moz-range-track {
+        height: 2px;
+        background: rgba(42, 33, 27, 0.16);
+        border-radius: 2px;
+      }
+      .gw-range::-moz-range-progress {
+        height: 2px;
+        background: var(--moss);
+        border-radius: 2px;
+      }
+      .gw-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        margin-top: -8px;
+        border-radius: 50%;
+        background: var(--poppy);
+        border: 3px solid #fbf8f2;
+        box-shadow: 0 1px 5px rgba(42, 33, 27, 0.35);
+        transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1);
+      }
+      .gw-range::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--poppy);
+        border: 3px solid #fbf8f2;
+        box-shadow: 0 1px 5px rgba(42, 33, 27, 0.35);
+      }
+      .gw-range:active::-webkit-slider-thumb {
+        transform: scale(1.25);
+      }
+      .gw-range:focus {
+        outline: none;
+      }
+      .gw-range:focus-visible::-webkit-slider-thumb {
+        box-shadow:
+          0 0 0 4px rgba(86, 112, 63, 0.35),
+          0 1px 5px rgba(42, 33, 27, 0.35);
+      }
+      .gw-range:focus-visible::-moz-range-thumb {
+        box-shadow: 0 0 0 4px rgba(86, 112, 63, 0.35);
+      }
+
+      /* destination */
+      .dest {
+        background: var(--poppy);
+        color: var(--cream);
+      }
+      .dest::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(90% 80% at 72% 38%, #c24b31 0%, rgba(184, 67, 43, 0) 60%),
+          radial-gradient(120% 100% at 50% 110%, #9c3622 0%, rgba(184, 67, 43, 0) 55%);
+        animation: fadeIn 1.6s ease both 0.2s;
+      }
+      .rise {
+        animation: rise 0.95s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+        animation-delay: var(--d, 0s);
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(16px);
+        }
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+      }
+      .line {
+        display: block;
+        overflow: hidden;
+        padding-bottom: 0.26em;
+        margin-bottom: -0.12em;
+      }
+      .line > span {
+        display: inline-block;
+        animation: lineUp 1.1s cubic-bezier(0.2, 0.85, 0.15, 1) both;
+        animation-delay: var(--d, 0s);
+      }
+      @keyframes lineUp {
+        from {
+          transform: translateY(108%);
+        }
+      }
+      .bloom-art {
+        animation:
+          artIn 2.2s cubic-bezier(0.15, 0.8, 0.2, 1) both,
+          spin 140s linear infinite 2.2s;
+      }
+      @keyframes artIn {
+        from {
+          transform: translateY(-50%) scale(1.6) rotate(-40deg);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(-50%) scale(1) rotate(0deg);
+        }
+      }
+      @keyframes spin {
+        from {
+          transform: translateY(-50%) rotate(0deg);
+        }
+        to {
+          transform: translateY(-50%) rotate(360deg);
+        }
+      }
+
+      .btn-cream {
+        transition:
+          transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1),
+          box-shadow 0.3s,
+          background-color 0.2s;
+      }
+      .btn-cream:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px -10px rgba(60, 15, 5, 0.55);
+      }
+      .btn-cream:active {
+        transform: translateY(0) scale(0.98);
+      }
+      .btn-cream:hover .replay-icon {
+        transform: rotate(-200deg);
+      }
+      .replay-icon {
+        transition: transform 0.7s cubic-bezier(0.3, 1.3, 0.5, 1);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .rise,
+        .line > span,
+        .bloom-art,
+        .dest::before {
+          animation-duration: 0.01s !important;
+          animation-delay: 0s !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+    <script
+      src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+
+    <!-- ================================================================
+     Garden engine — progress (0..1) is the only input; every visual
+     state of the plant is a pure function of the spring-smoothed value,
+     plus time-based life (wind, droplets, cursor).
+     ================================================================ -->
+    <script>
+      (function () {
+        "use strict";
+        const NS = "http://www.w3.org/2000/svg";
+        const R2D = 180 / Math.PI;
+        const TAU = Math.PI * 2;
+        const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const sstep = (a, b, x) => {
+          const t = clamp((x - a) / (b - a));
+          return t * t * (3 - 2 * t);
+        };
+        const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+        const f = (v) => Math.round(v * 100) / 100;
+
+        function E(tag, attrs, parent) {
+          const n = document.createElementNS(NS, tag);
+          if (attrs) for (const k in attrs) n.setAttribute(k, attrs[k]);
+          if (parent) parent.appendChild(n);
+          return n;
+        }
+        function rng(a) {
+          return function () {
+            a |= 0;
+            a = (a + 0x6d2b79f5) | 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+        // Catmull-Rom → cubic Bézier
+        function smoothPath(pts, closed) {
+          const n = pts.length;
+          const g = (i) => (closed ? pts[(i + n) % n] : pts[clamp(i, 0, n - 1)]);
+          let d = `M${f(pts[0][0])},${f(pts[0][1])}`;
+          const m = closed ? n : n - 1;
+          for (let i = 0; i < m; i++) {
+            const p0 = g(i - 1),
+              p1 = g(i),
+              p2 = g(i + 1),
+              p3 = g(i + 2);
+            d += `C${f(p1[0] + (p2[0] - p0[0]) / 6)},${f(p1[1] + (p2[1] - p0[1]) / 6)} ${f(p2[0] - (p3[0] - p1[0]) / 6)},${f(p2[1] - (p3[1] - p1[1]) / 6)} ${f(p2[0])},${f(p2[1])}`;
+          }
+          return closed ? d + "Z" : d;
+        }
+        function mix(a, b, t) {
+          const pa = parseInt(a.slice(1), 16),
+            pb = parseInt(b.slice(1), 16);
+          const r = Math.round(lerp(pa >> 16, pb >> 16, t));
+          const g = Math.round(lerp((pa >> 8) & 255, (pb >> 8) & 255, t));
+          const bl = Math.round(lerp(pa & 255, pb & 255, t));
+          return `rgb(${r},${g},${bl})`;
+        }
+
+        // ---- growth schedule (progress → stem length) ----
+        function stemLen(g) {
+          if (g <= 0.28) return 0;
+          if (g < 0.5) return (58 * (g - 0.28)) / 0.22; // shoot
+          if (g < 0.72) return 58 + (170 * (g - 0.5)) / 0.22; // stem + leaves
+          if (g < 0.9) return 228 + 22 * easeOut((g - 0.72) / 0.18); // bud peduncle
+          return 250;
+        }
+        function gAtLen(s) {
+          if (s <= 58) return 0.28 + (0.22 * s) / 58;
+          if (s <= 228) return 0.5 + (0.22 * (s - 58)) / 170;
+          return 0.72;
+        }
+
+        const LEAVES = [
+          { s: 88, side: -1, len: 46, spread: 60 },
+          { s: 118, side: 1, len: 52, spread: 56 },
+          { s: 150, side: -1, len: 47, spread: 54 },
+          { s: 180, side: 1, len: 40, spread: 50 },
+          { s: 206, side: -1, len: 30, spread: 46 },
+        ];
+        const PETAL_ORDER = [0, 2, 4, 1, 3, 5];
+        const FLOWER_SIZE = 0.7; // overall scale of the open flower head
+
+        function petalD(R, W) {
+          return (
+            `M0,0C${f(-W * 0.55)},${f(-R * 0.16)} ${f(-W * 1.02)},${f(-R * 0.58)} ${f(-W * 0.66)},${f(-R * 0.9)}` +
+            `C${f(-W * 0.36)},${f(-R * 1.1)} ${f(W * 0.36)},${f(-R * 1.1)} ${f(W * 0.66)},${f(-R * 0.9)}` +
+            `C${f(W * 1.02)},${f(-R * 0.58)} ${f(W * 0.55)},${f(-R * 0.16)} 0,0Z`
+          );
+        }
+        function petalVeinD(R, W) {
+          return (
+            `M0,-2Q${f(-W * 0.35)},${f(-R * 0.5)} ${f(-W * 0.42)},${f(-R * 0.86)}M0,-2L0,${f(-R * 0.93)}M0,-2Q${f(W * 0.35)},${f(-R * 0.5)} ${f(W * 0.42)},${f(-R * 0.86)}` +
+            `M0,-3Q${f(-W * 0.12)},${f(-R * 0.5)} ${f(-W * 0.2)},${f(-R * 0.92)}M0,-3Q${f(W * 0.12)},${f(-R * 0.5)} ${f(W * 0.2)},${f(-R * 0.92)}`
+          );
+        }
+        function leafGeom(len, w, u, droop) {
+          const p = len * 0.14,
+            bl = len - p,
+            ty = droop;
+          const wu = w * lerp(0.38, 1, u),
+            wl = w * Math.pow(u, 1.3);
+          const blade =
+            `M${f(p)},0C${f(p + bl * 0.18)},${f(-wu * 1.05)} ${f(p + bl * 0.62)},${f(-wu * 0.95 + ty * 0.45)} ${f(len)},${f(ty)}` +
+            `C${f(p + bl * 0.66)},${f(wl * 0.95 + ty * 0.6)} ${f(p + bl * 0.2)},${f(wl)} ${f(p)},0Z`;
+          const rib = `M${f(p)},0Q${f(p + bl * 0.5)},${f(ty * 0.3)} ${f(len * 0.97)},${f(ty * 0.95)}`;
+          let veins = "";
+          for (let j = 1; j <= 3; j++) {
+            const t = j / 4.2;
+            const mx = p + bl * t,
+              my = 2 * t * (1 - t) * ty * 0.3 + t * t * ty * 0.95;
+            veins += `M${f(mx)},${f(my)}L${f(mx + bl * 0.16)},${f(my - wu * 0.62 * (1 - t * 0.5))}`;
+            if (u > 0.3)
+              veins += `M${f(mx)},${f(my)}L${f(mx + bl * 0.16)},${f(my + wl * 0.6 * (1 - t * 0.5))}`;
+          }
+          return { blade, rib, veins, pet: p };
+        }
+        function cotyD(L) {
+          const w = L * 0.36;
+          return `M0,0C${f(L * 0.2)},${f(-w)} ${f(L * 0.8)},${f(-w * 1.1)} ${f(L)},0C${f(L * 0.8)},${f(w * 1.1)} ${f(L * 0.2)},${f(w)} 0,0Z`;
+        }
+        function bez(p0, p1, p2, p3, t) {
+          const u = 1 - t;
+          return [
+            u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0],
+            u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1],
+          ];
+        }
+
+        class Garden {
+          constructor(o) {
+            this.svg = o.svg;
+            this.label = o.label;
+            this.wordEl = o.word;
+            this.numEl = o.num;
+            this.stageEl = o.stage;
+            this.washEl = o.wash;
+            this.cb = o;
+            this.reduced =
+              window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+            this.t = 0;
+            this.speed = 1;
+            this.wind = 0;
+            this.gustT = 99;
+            this.nextGust = 5;
+            this.particles = [];
+            this.drops = [];
+            this.wets = [];
+            this.ptr = {
+              sx: -9999,
+              sy: -9999,
+              x: 0,
+              y: 0,
+              px: null,
+              py: null,
+              vx: 0,
+              vy: 0,
+              active: false,
+            };
+            this.build();
+            this._move = (e) => {
+              this.ptr.sx = e.clientX;
+              this.ptr.sy = e.clientY;
+              this.ptr.active = true;
+            };
+            this._leave = () => {
+              this.ptr.active = false;
+              this.ptr.px = null;
+            };
+            this._resize = () => this.resize();
+            window.addEventListener("pointermove", this._move, { passive: true });
+            window.addEventListener("pointerdown", this._move, { passive: true });
+            document.documentElement.addEventListener("pointerleave", this._leave);
+            window.addEventListener("resize", this._resize);
+            this.resize();
+            this.reset({ hold: 500, mode: "auto" });
+            this._step = (now) => this.step(now);
+          }
+          start() {
+            this.last = performance.now();
+            this.raf = requestAnimationFrame(this._step);
+          }
+          destroy() {
+            cancelAnimationFrame(this.raf);
+            window.removeEventListener("pointermove", this._move);
+            window.removeEventListener("pointerdown", this._move);
+            document.documentElement.removeEventListener("pointerleave", this._leave);
+            window.removeEventListener("resize", this._resize);
+          }
+          resize() {
+            this.vw = window.innerWidth;
+            this.vh = window.innerHeight;
+            this.s = Math.min((this.vh * 0.84) / 470, (this.vw * 0.9) / 330, 2.0);
+          }
+
+          // ------------------------------------------------------------ build
+          build() {
+            const svg = this.svg;
+            svg.innerHTML = "";
+            const defs = E("defs", {}, svg);
+            const grad = (id, attrs, stops) => {
+              const g = E("linearGradient", Object.assign({ id }, attrs), defs);
+              stops.forEach(([o, c]) => E("stop", { offset: o, "stop-color": c }, g));
+            };
+            grad("gw-soil", { x1: 0, y1: 0, x2: 0, y2: 1 }, [
+              ["0", "#5F4533"],
+              ["0.2", "#4A3526"],
+              ["1", "#31231A"],
+            ]);
+            grad("gw-leaf", { x1: 0, y1: 0, x2: 1, y2: 0 }, [
+              ["0", "#4B6739"],
+              ["0.55", "#5E7C45"],
+              ["1", "#7C9959"],
+            ]);
+            grad("gw-petal", { x1: 0, y1: 1, x2: 0, y2: 0 }, [
+              ["0", "#6E1F14"],
+              ["0.22", "#A2361F"],
+              ["0.6", "#BC452C"],
+              ["1", "#D9634A"],
+            ]);
+            grad("gw-bud", { x1: 0, y1: 1, x2: 0, y2: 0 }, [
+              ["0", "#7E2616"],
+              ["1", "#C84D32"],
+            ]);
+            const blur = E(
+              "filter",
+              { id: "gw-blur", x: "-50%", y: "-100%", width: "200%", height: "300%" },
+              defs
+            );
+            E("feGaussianBlur", { stdDeviation: 5 }, blur);
+
+            this.buildSoilGeom();
+            E("path", { d: this.soilD }, E("clipPath", { id: "gw-soilclip" }, defs));
+            E(
+              "path",
+              { d: "M-3000,-3000H3000V3000H-3000Z " + this.soilD, "clip-rule": "evenodd" },
+              E("clipPath", { id: "gw-skyclip" }, defs)
+            );
+            this.stemPath = E("path", { id: "gw-stem" }, defs);
+
+            this.cam = E("g", {}, svg);
+            const rest = (this.rest = E("g", {}, this.cam));
+            E(
+              "ellipse",
+              {
+                cx: 0,
+                cy: 123,
+                rx: 100,
+                ry: 6,
+                fill: "#2A211B",
+                opacity: 0.18,
+                filter: "url(#gw-blur)",
+              },
+              rest
+            );
+
+            // soil body + texture
+            E("path", { d: this.soilD, fill: "url(#gw-soil)" }, rest);
+            const tex = E("g", { "clip-path": "url(#gw-soilclip)" }, rest);
+            this.buildSoilTexture(tex);
+            this.wetG = E("g", {}, tex);
+            this.rootG = E("g", { "clip-path": "url(#gw-soilclip)" }, rest);
+            E("use", { href: "#gw-stem", fill: "#D9D1A8", "clip-path": "url(#gw-soilclip)" }, rest);
+
+            // seed
+            this.seedG = E("g", {}, rest);
+            this.seedL = E("g", {}, this.seedG);
+            this.seedR = E("g", {}, this.seedG);
+            E("path", { d: "M0,-5.4C-4.4,-2.8 -4.4,3 0,5.4Z", fill: "#8A6444" }, this.seedL);
+            E("path", { d: "M0,-5.4C4.4,-2.8 4.4,3 0,5.4Z", fill: "#6C4D33" }, this.seedR);
+            E(
+              "ellipse",
+              { cx: -1.6, cy: -1.4, rx: 0.8, ry: 2, fill: "#C9A57F", opacity: 0.55 },
+              this.seedL
+            );
+
+            // rim + surface crumbs (drawn over the seed so it sinks behind the topsoil line)
+            E(
+              "path",
+              {
+                d: smoothPath(this.top, false),
+                fill: "none",
+                stroke: "#6B4F3B",
+                "stroke-width": 3,
+                "stroke-linecap": "round",
+              },
+              rest
+            );
+            E(
+              "path",
+              {
+                d: smoothPath(
+                  this.top.map(([x, y]) => [x, y - 1.2]),
+                  false
+                ),
+                fill: "none",
+                stroke: "#8C6E57",
+                "stroke-width": 0.7,
+                opacity: 0.55,
+                "stroke-linecap": "round",
+              },
+              rest
+            );
+            const r = rng(11);
+            for (let i = 0; i < 26; i++) {
+              const x = (r() - 0.5) * 212;
+              E(
+                "circle",
+                {
+                  cx: f(x),
+                  cy: f(this.surfaceY(x) - 0.8 - r() * 1.4),
+                  r: f(0.45 + r() * 0.9),
+                  fill: r() < 0.5 ? "#6E5240" : "#54402F",
+                },
+                rest
+              );
+            }
+
+            E(
+              "use",
+              {
+                href: "#gw-stem",
+                fill: "#58743F",
+                stroke: "#46602F",
+                "stroke-width": 0.35,
+                "clip-path": "url(#gw-skyclip)",
+              },
+              rest
+            );
+
+            // leaves (cotyledons first, then true leaves)
+            this.leafG = E("g", {}, rest);
+            this.leaves = [];
+            const mk = (spec) => {
+              const g = E("g", { visibility: "hidden" }, this.leafG);
+              const o = Object.assign(
+                { g, off: 0, vel: 0, ph: Math.random() * TAU, key: "", vis: false },
+                spec
+              );
+              if (spec.type === "coty") {
+                o.blade = E("path", {}, g);
+              } else {
+                o.petiole = E(
+                  "line",
+                  {
+                    x1: 0,
+                    y1: 0,
+                    y2: 0,
+                    stroke: "#4B6739",
+                    "stroke-width": 1.3,
+                    "stroke-linecap": "round",
+                  },
+                  g
+                );
+                o.blade = E("path", { fill: "url(#gw-leaf)" }, g);
+                o.rib = E(
+                  "path",
+                  {
+                    fill: "none",
+                    stroke: "#3C5530",
+                    "stroke-width": 0.55,
+                    opacity: 0.6,
+                    "stroke-linecap": "round",
+                  },
+                  g
+                );
+                o.veins = E(
+                  "path",
+                  {
+                    fill: "none",
+                    stroke: "#3C5530",
+                    "stroke-width": 0.35,
+                    opacity: 0.3,
+                    "stroke-linecap": "round",
+                  },
+                  g
+                );
+                o.g0 = gAtLen(spec.s + 4);
+              }
+              this.leaves.push(o);
+            };
+            mk({ type: "coty", side: -1 });
+            mk({ type: "coty", side: 1 });
+            LEAVES.forEach((l) => mk(Object.assign({ type: "leaf" }, l)));
+
+            // bud
+            this.budG = E("g", { style: "display:none" }, rest);
+            E("ellipse", { cx: 0, cy: -1, rx: 2.8, ry: 2.2, fill: "#58743F" }, this.budG);
+            this.budInner = E("path", { fill: "url(#gw-bud)" }, this.budG);
+            this.sepL = E("g", {}, this.budG);
+            this.sepR = E("g", {}, this.budG);
+            this.sepLp = E(
+              "path",
+              { fill: "#5A7641", stroke: "#48612F", "stroke-width": 0.3 },
+              this.sepL
+            );
+            this.sepLh = E(
+              "path",
+              { fill: "none", stroke: "#5A7641", "stroke-width": 0.35, "stroke-linecap": "round" },
+              this.sepL
+            );
+            this.sepRp = E(
+              "path",
+              { fill: "#52703B", stroke: "#48612F", "stroke-width": 0.3 },
+              this.sepR
+            );
+            this.sepRh = E(
+              "path",
+              { fill: "none", stroke: "#52703B", "stroke-width": 0.35, "stroke-linecap": "round" },
+              this.sepR
+            );
+
+            this.partG = E("g", {}, rest);
+
+            // flower (outside `rest` so it can survive the fade during expansion)
+            this.flowerG = E("g", { style: "display:none" }, this.cam);
+            this.faceG = E("g", {}, this.flowerG);
+            this.washC = E("circle", { r: 30, fill: "#B8432B", opacity: 0 }, this.faceG);
+            this.petals = [];
+            PETAL_ORDER.forEach((idx) => {
+              const g = E("g", {}, this.faceG);
+              const path = E(
+                "path",
+                {
+                  fill: "url(#gw-petal)",
+                  stroke: "#8F301C",
+                  "stroke-width": 0.35,
+                  "stroke-opacity": 0.5,
+                },
+                g
+              );
+              const vein = E(
+                "path",
+                {
+                  fill: "none",
+                  stroke: "#6E1F14",
+                  "stroke-width": 0.4,
+                  opacity: 0.16,
+                  "stroke-linecap": "round",
+                },
+                g
+              );
+              this.petals.push({
+                idx,
+                g,
+                path,
+                vein,
+                k: idx % 2 ? 0.9 : 1,
+                kw: idx % 2 ? 0.92 : 1,
+                base: 0,
+              });
+            });
+            this.centerG = E("g", {}, this.faceG);
+            let fil = "";
+            const cr = rng(5);
+            const anth = E("g", {}, this.centerG);
+            for (let k = 0; k < 34; k++) {
+              const a = (k / 34) * TAU + (cr() - 0.5) * 0.12;
+              const r2 = 10.2 + (cr() - 0.5) * 2.4;
+              fil += `M${f(Math.cos(a) * 6)},${f(Math.sin(a) * 6)}L${f(Math.cos(a) * r2)},${f(Math.sin(a) * r2)}`;
+              E(
+                "circle",
+                {
+                  cx: f(Math.cos(a) * r2),
+                  cy: f(Math.sin(a) * r2),
+                  r: f(0.8 + cr() * 0.45),
+                  fill: cr() < 0.2 ? "#4A3444" : "#2A1D27",
+                },
+                anth
+              );
+              if (cr() < 0.25)
+                E(
+                  "circle",
+                  {
+                    cx: f(Math.cos(a) * (r2 + 0.9)),
+                    cy: f(Math.sin(a) * (r2 + 0.9)),
+                    r: 0.35,
+                    fill: "#E8DCC4",
+                    opacity: 0.8,
+                  },
+                  anth
+                );
+            }
+            this.centerG.insertBefore(
+              E("path", {
+                d: fil,
+                stroke: "#2A1D27",
+                "stroke-width": 0.45,
+                "stroke-linecap": "round",
+              }),
+              anth
+            );
+            E("circle", { r: 7.4, fill: "#2A1D27" }, this.centerG);
+            E("circle", { cx: -2, cy: -2.2, r: 2.6, fill: "#ffffff", opacity: 0.07 }, this.centerG);
+            for (let k = 0; k < 9; k++)
+              E(
+                "circle",
+                { cx: f((cr() - 0.5) * 9), cy: f((cr() - 0.5) * 9), r: 0.5, fill: "#4A3444" },
+                this.centerG
+              );
+          }
+
+          buildSoilGeom() {
+            const r = rng(7);
+            const top = [];
+            for (let x = -112; x <= 112.1; x += 14) {
+              let y = -3.4 * Math.cos(((x / 112) * Math.PI) / 2) + (r() - 0.5) * 1.5;
+              if (Math.abs(x) > 100) y = 0.5;
+              top.push([x, y]);
+            }
+            this.top = top;
+            const body = [
+              [121, 22],
+              [113, 63],
+              [86, 99],
+              [32, 115],
+              [-30, 114],
+              [-87, 98],
+              [-114, 61],
+              [-122, 21],
+            ];
+            this.soilD = smoothPath(top.concat(body), true);
+            this.surf0 = this.surfaceY(0);
+          }
+          soilBottom(x) {
+            return 112 * Math.sqrt(Math.max(0, 1 - (x / 124) ** 2)) - 4;
+          }
+          surfaceY(x) {
+            const t = this.top;
+            if (x < t[0][0] || x > t[t.length - 1][0]) return Infinity;
+            const i = Math.min(t.length - 2, Math.floor((x - t[0][0]) / 14));
+            return lerp(t[i][1], t[i + 1][1], (x - t[i][0]) / 14);
+          }
+          buildSoilTexture(g) {
+            const r = rng(3);
+            [38, 66, 90].forEach((y0, j) => {
+              const pts = [];
+              for (let x = -130; x <= 130; x += 20)
+                pts.push([x, y0 + Math.sin(x / 23 + j * 2) * 2.5 + (r() - 0.5) * 2]);
+              E(
+                "path",
+                {
+                  d: smoothPath(pts, false),
+                  fill: "none",
+                  stroke: "#76594A",
+                  "stroke-width": 0.6,
+                  opacity: 0.2,
+                },
+                g
+              );
+            });
+            for (let i = 0; i < 6; i++) {
+              const x = (r() - 0.5) * 170,
+                y = 20 + r() * 70;
+              if (y > this.soilBottom(x) - 8) continue;
+              const rx = 2.5 + r() * 3;
+              const pg = E(
+                "g",
+                { transform: `translate(${f(x)},${f(y)}) rotate(${f(r() * 180)})` },
+                g
+              );
+              E("ellipse", { rx: f(rx), ry: f(rx * 0.68), fill: "#6E5A4B" }, pg);
+              E(
+                "ellipse",
+                {
+                  cx: f(-rx * 0.25),
+                  cy: f(-rx * 0.2),
+                  rx: f(rx * 0.45),
+                  ry: f(rx * 0.25),
+                  fill: "#8E7A69",
+                  opacity: 0.55,
+                },
+                pg
+              );
+            }
+            for (let i = 0; i < 110; i++) {
+              const x = (r() - 0.5) * 214;
+              const y0 = this.surfaceY(x) + 3,
+                y1 = this.soilBottom(x) - 2;
+              if (!(y1 > y0)) continue;
+              E(
+                "circle",
+                {
+                  cx: f(x),
+                  cy: f(lerp(y0, y1, r())),
+                  r: f(0.3 + r() * 0.9),
+                  fill: r() < 0.5 ? "#76594A" : "#241810",
+                  opacity: f(0.3 + r() * 0.5),
+                },
+                g
+              );
+            }
+          }
+
+          // ------------------------------------------------------------ roots
+          genRoots(seed) {
+            const rand = rng(seed);
+            const roots = [];
+            const grow = (x, y, a, len, depth, t0) => {
+              const step = 3,
+                n = Math.max(3, Math.round(len / step));
+              const pts = [[x, y]],
+                angs = [a];
+              for (let i = 0; i < n; i++) {
+                a += (rand() - 0.5) * (depth === 0 ? 0.3 : 0.55);
+                a += (Math.PI / 2 - a) * (depth === 0 ? 0.1 : 0.035);
+                const by = this.soilBottom(x);
+                if (y > by - 16) {
+                  const tgt = Math.cos(a) >= 0 ? 0.2 : Math.PI - 0.2;
+                  a += (tgt - a) * 0.3;
+                }
+                if (Math.abs(x) > 92) {
+                  const tgt = x > 0 ? Math.PI * 0.72 : Math.PI * 0.28;
+                  a += (tgt - a) * 0.25;
+                }
+                if (y < this.surfaceY(x) + 9) a += (Math.PI / 2 - a) * 0.3;
+                x += Math.cos(a) * step;
+                y += Math.sin(a) * step;
+                pts.push([x, y]);
+                angs.push(a);
+              }
+              const L = n * step;
+              const root = { pts, depth, t0, dur: L / 36, len: L };
+              roots.push(root);
+              if (depth < 3) {
+                const nb =
+                  depth === 0
+                    ? 6 + Math.floor(rand() * 3)
+                    : depth === 1
+                      ? 2 + Math.floor(rand() * 3)
+                      : Math.floor(rand() * 3);
+                for (let k = 0; k < nb; k++) {
+                  const pos = 0.1 + ((k + rand() * 0.8) / nb) * 0.82;
+                  const idx = Math.min(n, Math.round(pos * n));
+                  const side = (k % 2 ? 1 : -1) * (rand() < 0.15 ? -1 : 1);
+                  const ca = angs[idx] + side * (0.55 + rand() * 0.75);
+                  const cl =
+                    L * (depth === 0 ? 0.46 : 0.52) * (0.55 + rand() * 0.6) * (1 - pos * 0.45);
+                  if (cl < 6) continue;
+                  grow(
+                    pts[idx][0],
+                    pts[idx][1],
+                    ca,
+                    cl,
+                    depth + 1,
+                    t0 + pos * root.dur + rand() * 0.3
+                  );
+                }
+              }
+            };
+            grow(0, 16, Math.PI / 2, 88, 0, 0);
+            grow(-1.5, 15, Math.PI / 2 + 0.9, 34, 1, 0.35);
+            grow(1.5, 15, Math.PI / 2 - 0.9, 30, 1, 0.5);
+            let maxEnd = 0;
+            roots.forEach((r) => {
+              maxEnd = Math.max(maxEnd, r.t0 + r.dur);
+            });
+            roots.forEach((r) => {
+              r.t0 /= maxEnd;
+              r.dur /= maxEnd;
+            });
+            return roots;
+          }
+          buildRoots(seed) {
+            this.rootG.innerHTML = "";
+            this.roots = this.genRoots(seed);
+            const W = [2.0, 1.15, 0.7, 0.45],
+              O = [0.95, 0.85, 0.72, 0.55];
+            this.roots.sort((a, b) => b.depth - a.depth);
+            for (const r of this.roots) {
+              r.el = E(
+                "path",
+                {
+                  d: smoothPath(r.pts, false),
+                  fill: "none",
+                  stroke: "#EADFC8",
+                  "stroke-width": W[r.depth],
+                  opacity: O[r.depth],
+                  "stroke-linecap": "round",
+                  pathLength: 1,
+                  "stroke-dasharray": "1 1",
+                  "stroke-dashoffset": 1,
+                  visibility: "hidden",
+                },
+                this.rootG
+              );
+              if (r.depth <= 1)
+                r.tip = E(
+                  "circle",
+                  { r: W[r.depth] * 0.85, fill: "#F7EFDF", visibility: "hidden" },
+                  this.rootG
+                );
+              r.cum = [0];
+              for (let i = 1; i < r.pts.length; i++)
+                r.cum.push(
+                  r.cum[i - 1] +
+                    Math.hypot(r.pts[i][0] - r.pts[i - 1][0], r.pts[i][1] - r.pts[i - 1][1])
+                );
+              r.last = -1;
+            }
+          }
+
+          // ------------------------------------------------------------ control
+          reset(o) {
+            o = o || {};
+            this.p = 0;
+            this.g = 0;
+            this.gv = 0;
+            this.b = 0;
+            this.bv = 0;
+            this.e = 0;
+            this.phase = "growing";
+            this.mode = o.mode || "auto";
+            this.paused = false;
+            this.holdUntil = this.t + (o.hold || 0) / 1000;
+            this.loaderWait = 450;
+            this.expandAt = null;
+            this.forceTransition = false;
+            this.prevTd = 0;
+            this.emerged = false;
+            this.sepalsDropped = false;
+            this.pollenDone = false;
+            this.flowerVis = false;
+            this.budVis = false;
+            this.lastPct = -1;
+            this.lastStage = "";
+            this.particles.forEach((p) => p.el.remove());
+            this.particles = [];
+            this.drops.forEach((d) => d.el.remove());
+            this.drops = [];
+            this.wets.forEach((w) => w.el.remove());
+            this.wets = [];
+            this.leaves.forEach((l) => {
+              l.off = 0;
+              l.vel = 0;
+              l.key = "";
+            });
+            this.nextDrop = this.t + 3.5;
+            const seed = (Math.random() * 1e9) | 0;
+            this.buildRoots(seed);
+            const pr = rng(seed + 1),
+              off = pr() * 60;
+            this.petals.forEach((P) => {
+              P.base = P.idx * 60 - 90 + off + (pr() - 0.5) * 6;
+            });
+            this.stats = {
+              drops: 0,
+              roots: this.roots.length,
+              leaves: LEAVES.length,
+              start: null,
+              end: null,
+            };
+            this.rest.style.opacity = 1;
+            this.label.style.opacity = 1;
+            this.washEl.style.opacity = 0;
+            this.flowerG.style.display = "none";
+            this.budG.style.display = "none";
+            this.cb.onProgress && this.cb.onProgress(0);
+          }
+          restart(o) {
+            this.reset(o);
+          }
+          setProgress(v) {
+            if (this.phase !== "growing") return;
+            this.mode = "manual";
+            this.p = clamp(v);
+            if (this.p < 1) this.forceTransition = false;
+            if (this.stats.start == null) this.stats.start = this.t;
+          }
+          setMode(m) {
+            this.mode = m;
+            if (m === "auto") {
+              this.paused = false;
+              this.loaderWait = 250;
+            }
+          }
+          setPaused(v) {
+            this.paused = v;
+          }
+          triggerTransition() {
+            if (this.phase !== "growing") return;
+            this.p = 1;
+            this.forceTransition = true;
+            if (this.stats.start == null) this.stats.start = this.t;
+            this.cb.onProgress && this.cb.onProgress(1);
+          }
+
+          // ------------------------------------------------------------ loop
+          step(now) {
+            const dt = Math.min(0.033, Math.max(0.001, (now - this.last) / 1000));
+            this.last = now;
+            this.t += dt;
+            if (this.phase !== "done") this.update(dt);
+            this.raf = requestAnimationFrame(this._step);
+          }
+          update(dt) {
+            this.updateWind(dt);
+            this.tickLoader(dt);
+            if (this.phase === "growing") {
+              // progress → growth, through a critically damped spring
+              const k = 26,
+                c = 2 * Math.sqrt(k);
+              this.gv += (k * (this.p - this.g) - c * this.gv) * dt;
+              this.g += this.gv * dt;
+              if (Math.abs(this.p - this.g) < 1e-4 && Math.abs(this.gv) < 1e-3) {
+                this.g = this.p;
+                this.gv = 0;
+              }
+              // bloom — an underdamped spring for the satisfying overshoot
+              const bt = this.p >= 1 && this.g > 0.985 ? 1 : 0;
+              this.bv += (125 * (bt - this.b) - 9.5 * this.bv) * dt;
+              this.b += this.bv * dt;
+            }
+            const g = clamp(this.g);
+            if (this.phase === "growing") this.updateCamera(g);
+            this.updatePointer(dt);
+            this.drawSeed(g);
+            this.drawRoots(g);
+            const stem = this.drawStem(g);
+            this.drawLeaves(g, stem, dt);
+            this.drawBud(g, stem);
+            this.drawFlower(g, stem);
+            this.updateParticles(dt);
+            this.updateDrops(dt);
+            this.updateLabel(g);
+            this.updateTransition(dt);
+          }
+          updateWind(dt) {
+            const t = this.t;
+            if (t > this.nextGust) {
+              this.gustT = 0;
+              this.gustAmp = 0.5 + Math.random() * 0.8;
+              this.nextGust = t + 6 + Math.random() * 7;
+            }
+            let gust = 0;
+            if (this.gustT < 2.8) {
+              this.gustT += dt;
+              gust = this.gustAmp * Math.pow(Math.sin((Math.PI * this.gustT) / 2.8), 2);
+            }
+            this.wind =
+              (0.5 * Math.sin(t * 0.61) +
+                0.26 * Math.sin(t * 1.53 + 1.3) +
+                0.12 * Math.sin(t * 3.2 + 0.4) +
+                gust) *
+              (this.reduced ? 0.3 : 1);
+          }
+          tickLoader(dt) {
+            if (this.phase !== "growing" || this.mode !== "auto" || this.paused) return;
+            if (this.t < this.holdUntil) return;
+            if (this.stats.start == null) this.stats.start = this.t;
+            if (this.p >= 1) return;
+            this.loaderWait -= dt * 1000 * this.speed;
+            if (this.loaderWait > 0) return;
+            let inc, wait;
+            if (this.p < 0.001) {
+              inc = 0.05;
+              wait = 800;
+            } else {
+              // chunky, network-like arrivals — the spring turns them into growth surges
+              inc = (0.7 + Math.pow(Math.random(), 1.6) * 6.8) / 100;
+              wait = 70 + Math.random() * 300;
+              if (Math.random() < 0.09) wait += 500 + Math.random() * 900;
+            }
+            this.p = Math.min(1, this.p + inc);
+            if (this.p > 0.995) this.p = 1;
+            this.loaderWait = wait;
+            if (this.p >= 1) this.stats.end = this.t;
+            this.cb.onProgress && this.cb.onProgress(this.p);
+          }
+          updateCamera(g) {
+            const cy = lerp(58, -66, sstep(0.28, 0.92, g));
+            this.ox = this.vw / 2;
+            this.oy = this.vh / 2 - cy * this.s;
+            this.cam.setAttribute(
+              "transform",
+              `translate(${f(this.ox)},${f(this.oy)}) scale(${f(this.s * 1000) / 1000})`
+            );
+          }
+          updatePointer(dt) {
+            const P = this.ptr;
+            if (!P.active) {
+              P.vx *= 0.9;
+              P.vy *= 0.9;
+              return;
+            }
+            const x = (P.sx - this.ox) / this.s,
+              y = (P.sy - this.oy) / this.s;
+            if (P.px != null) {
+              P.vx = lerp(P.vx, (x - P.px) / dt, 0.35);
+              P.vy = lerp(P.vy, (y - P.py) / dt, 0.35);
+            }
+            P.px = x;
+            P.py = y;
+            P.x = x;
+            P.y = y;
+          }
+
+          // ------------------------------------------------------------ seed
+          drawSeed(g) {
+            const td = clamp(g / 0.05);
+            const s0 = this.surf0 - 4.3;
+            let y, rot;
+            if (td < 0.55) {
+              const u = td / 0.55;
+              y = lerp(-150, s0, u * u);
+              rot = lerp(-70, 8, u);
+            } else if (td < 0.8) {
+              const u = (td - 0.55) / 0.25;
+              y = s0 - 11 * Math.sin(u * Math.PI);
+              rot = lerp(8, 30, u);
+            } else {
+              const u = (td - 0.8) / 0.2;
+              y = s0 - 2.6 * Math.sin(u * Math.PI);
+              rot = lerp(30, 22, u);
+            }
+            if (td <= 0.001 && !this.reduced) {
+              y += Math.sin(this.t * 2.1) * 2.2;
+              rot += Math.sin(this.t * 1.6) * 7;
+            }
+            const sk = sstep(0.05, 0.085, g);
+            y = lerp(y, 12, sk);
+            rot = lerp(rot, 12, sk);
+            if (this.phase === "growing") {
+              if (this.prevTd < 0.55 && td >= 0.55) this.emitCrumbs(0, this.surf0, 13, 1);
+              if (this.prevTd < 0.8 && td >= 0.8) this.emitCrumbs(0, this.surf0, 4, 0.45);
+            }
+            this.prevTd = td;
+            const sp = sstep(0.27, 0.37, g);
+            this.seedL.setAttribute(
+              "transform",
+              `translate(${f(-sp * 1.4)},0) rotate(${f(-sp * 26)} 0 4)`
+            );
+            this.seedR.setAttribute(
+              "transform",
+              `translate(${f(sp * 1.4)},0) rotate(${f(sp * 26)} 0 4)`
+            );
+            this.seedG.setAttribute("transform", `translate(0,${f(y)}) rotate(${f(rot)})`);
+            this.seedG.setAttribute("opacity", f(lerp(1, 0.75, sstep(0.5, 0.8, g))));
+          }
+
+          // ------------------------------------------------------------ roots
+          drawRoots(g) {
+            const R = clamp((g - 0.09) / 0.29);
+            for (const r of this.roots) {
+              const fr = clamp((R - r.t0) / r.dur);
+              if (Math.abs(fr - r.last) < 0.0005) continue;
+              r.last = fr;
+              if (fr <= 0) {
+                r.el.setAttribute("visibility", "hidden");
+                if (r.tip) r.tip.setAttribute("visibility", "hidden");
+                continue;
+              }
+              r.el.setAttribute("visibility", "visible");
+              r.el.style.strokeDashoffset = 1 - fr;
+              if (r.tip) {
+                if (fr >= 1) {
+                  r.tip.setAttribute("visibility", "hidden");
+                  continue;
+                }
+                const target = fr * r.cum[r.cum.length - 1];
+                let i = 1;
+                while (i < r.cum.length - 1 && r.cum[i] < target) i++;
+                const u = (target - r.cum[i - 1]) / (r.cum[i] - r.cum[i - 1] || 1);
+                r.tip.setAttribute("cx", f(lerp(r.pts[i - 1][0], r.pts[i][0], u)));
+                r.tip.setAttribute("cy", f(lerp(r.pts[i - 1][1], r.pts[i][1], u)));
+                r.tip.setAttribute("visibility", "visible");
+              }
+            }
+          }
+
+          // ------------------------------------------------------------ stem
+          drawStem(g) {
+            const L = stemLen(g);
+            if (L < 0.4) {
+              this.stemPath.setAttribute("d", "");
+              this.stem = null;
+              this.emerged = false;
+              return null;
+            }
+            const ds = clamp(L / 70, 1, 2.6),
+              N = Math.max(2, Math.ceil(L / ds)),
+              d = L / N;
+            const hook = 1 - sstep(0.4, 0.475, g);
+            const nod = sstep(0.71, 0.79, g) * (1 - sstep(0.85, 0.97, g));
+            const budW = sstep(0.7, 0.8, g);
+            const rm = this.reduced ? 0.3 : 1;
+            const sway =
+              (Math.sin(this.t * 1.2) * 0.08 + Math.sin(this.t * 0.53 + 2) * 0.045) * budW * rm;
+            const HL = 16,
+              HA = 2.85,
+              NL = 38,
+              NA = 1.85,
+              SL = 44;
+            let x = 0,
+              y = 9,
+              a = -Math.PI / 2 - 0.03;
+            const pts = [[x, y, a]];
+            for (let i = 0; i < N; i++) {
+              const s = (i + 0.5) * d,
+                fromTip = L - s;
+              let k = 0.0016 * Math.sin(s / 58 + 0.6) + this.wind * 0.00055 * (0.35 + s / 250);
+              if (fromTip < HL) k += (hook * HA) / HL;
+              if (fromTip < NL) k += (nod * NA) / NL;
+              if (fromTip < SL) k += (sway + this.wind * budW * 0.04) / SL;
+              a += k * d;
+              x += Math.cos(a) * d;
+              y += Math.sin(a) * d;
+              pts.push([x, y, a]);
+            }
+            const mw = lerp(0.55, 1, sstep(0.42, 0.85, g));
+            const left = [],
+              right = [];
+            for (let i = 0; i <= N; i++) {
+              const [px, py, pa] = pts[i];
+              const u = (i * d) / L;
+              const w = (mw * lerp(3.5, 1.9, u) + (i < 3 ? (3 - i) * 0.15 : 0)) / 2;
+              const nx = -Math.sin(pa),
+                ny = Math.cos(pa);
+              left.push(`${f(px + nx * w)},${f(py + ny * w)}`);
+              right.push(`${f(px - nx * w)},${f(py - ny * w)}`);
+            }
+            const tipW = (mw * 1.9) / 2;
+            this.stemPath.setAttribute(
+              "d",
+              `M${left.join("L")}A${f(tipW)},${f(tipW)} 0 0 0 ${right[N]}L${right.reverse().join("L")}Z`
+            );
+            this.stem = { pts, d, L };
+
+            if (L < 40 && this.phase === "growing") {
+              let best = Infinity,
+                bx = 0;
+              for (const p of pts) {
+                const dd = p[1] - this.surfaceY(p[0]);
+                if (dd < best) {
+                  best = dd;
+                  bx = p[0];
+                }
+              }
+              if (!this.emerged && best < -1.2) {
+                this.emerged = true;
+                this.emitCrumbs(bx, this.surfaceY(bx), 8, 0.55);
+              } else if (this.emerged && best > 0.6) this.emerged = false;
+            }
+            return this.stem;
+          }
+          sampleStem(s) {
+            const st = this.stem,
+              n = st.pts.length - 1;
+            const i = clamp(s / st.d, 0, n),
+              i0 = Math.floor(i),
+              i1 = Math.min(i0 + 1, n),
+              u = i - i0;
+            const p0 = st.pts[i0],
+              p1 = st.pts[i1];
+            return { x: lerp(p0[0], p1[0], u), y: lerp(p0[1], p1[1], u), a: lerp(p0[2], p1[2], u) };
+          }
+
+          // ------------------------------------------------------------ leaves
+          drawLeaves(g, stem, dt) {
+            const L = stem ? stem.L : 0,
+              P = this.ptr,
+              t = this.t;
+            for (const lf of this.leaves) {
+              let grow, unfold, len, s, spread;
+              if (lf.type === "coty") {
+                grow = L > 0 ? sstep(0.3, 0.44, g) : 0;
+                unfold = sstep(0.445, 0.53, g);
+                s = Math.min(L, 54);
+                spread = lerp(3, 64, unfold);
+                len = 13 * lerp(0.35, 1, grow) * (1 + 0.18 * sstep(0.5, 0.72, g));
+              } else {
+                grow = easeOut(clamp((g - lf.g0) / 0.075));
+                unfold = sstep(lf.g0 + 0.012, lf.g0 + 0.085, g);
+                s = lf.s;
+                spread = lerp(8, lf.spread, unfold);
+                len = lf.len * lerp(0.12, 1, grow);
+              }
+              const vis = stem && grow > 0.002 && L >= s - 0.01;
+              if (!vis) {
+                if (lf.vis) {
+                  lf.g.setAttribute("visibility", "hidden");
+                  lf.vis = false;
+                }
+                continue;
+              }
+              if (!lf.vis) {
+                lf.g.setAttribute("visibility", "visible");
+                lf.vis = true;
+              }
+
+              const pt = this.sampleStem(s);
+              const dir0 = pt.a + (lf.side * spread) / R2D;
+              const mx = pt.x + Math.cos(dir0) * len * 0.6,
+                my = pt.y + Math.sin(dir0) * len * 0.6;
+              // cursor: leaves lean away from the pointer and get brushed by its motion
+              let target = 0;
+              if (P.active && this.phase === "growing") {
+                const dx = P.x - mx,
+                  dy = P.y - my,
+                  dist = Math.hypot(dx, dy),
+                  Rr = 30 + len * 0.7;
+                if (dist < Rr) {
+                  const st = 1 - dist / Rr;
+                  const cross = Math.cos(dir0) * dy - Math.sin(dir0) * dx;
+                  target = -Math.sign(cross) * st * st * 20;
+                  const vn = -Math.sin(dir0) * P.vx + Math.cos(dir0) * P.vy;
+                  lf.vel += clamp(vn * dt * st * 6, -40, 40);
+                }
+              }
+              lf.vel += (150 * (target - lf.off) - 10 * lf.vel) * dt;
+              lf.off = clamp(lf.off + lf.vel * dt, -38, 38);
+              const flutter =
+                (this.wind * 2.8 +
+                  Math.sin(t * 4.1 + lf.ph) * 0.8 * (0.4 + Math.abs(this.wind) * 0.6)) *
+                grow *
+                (pt.y < 0 ? 1 : 0.2);
+              const ang = dir0 * R2D + flutter + lf.off;
+              lf.g.setAttribute(
+                "transform",
+                `translate(${f(pt.x)},${f(pt.y)}) rotate(${f(ang)}) scale(1,${lf.side})`
+              );
+              lf.world = { x: pt.x, y: pt.y, a: ang / R2D, len, grow };
+
+              const key = `${Math.round(len * 12)}|${Math.round(unfold * 80)}`;
+              if (lf.type === "coty") {
+                if (key !== lf.key) {
+                  lf.blade.setAttribute("d", cotyD(len));
+                  lf.key = key;
+                }
+                const young = mix("#D6CF9E", "#86A064", sstep(0.36, 0.47, g));
+                lf.blade.setAttribute(
+                  "fill",
+                  g > 0.8 ? mix("#86A064", "#A9A867", sstep(0.8, 1, g)) : young
+                );
+              } else if (key !== lf.key) {
+                lf.key = key;
+                const geo = leafGeom(len, len * 0.26, unfold, len * 0.14 * grow);
+                lf.blade.setAttribute("d", geo.blade);
+                lf.rib.setAttribute("d", geo.rib);
+                lf.veins.setAttribute("d", geo.veins);
+                lf.veins.setAttribute("opacity", f(0.3 * unfold));
+                lf.petiole.setAttribute("x2", f(geo.pet));
+              }
+            }
+          }
+
+          // ------------------------------------------------------------ bud
+          drawBud(g, stem) {
+            const bs = easeOut(sstep(0.7, 0.8, g));
+            const show = stem && bs > 0.002 && this.b < 0.4;
+            if (!show) {
+              if (this.budVis) {
+                this.budG.style.display = "none";
+                this.budVis = false;
+              }
+              return;
+            }
+            if (!this.budVis) {
+              this.budG.style.display = "";
+              this.budVis = true;
+            }
+            const tip = stem.pts[stem.pts.length - 1],
+              a = tip[2];
+            const sw = lerp(0.85, 1.12, sstep(0.84, 1, g));
+            const H = 21 * sw,
+              W = 6.6 * sw;
+            const open = sstep(0.86, 1, g) * 0.4 + clamp(this.b) * 1.4;
+            this.budInner.setAttribute(
+              "d",
+              `M0,-1C${f(-W * 1.1)},-4 ${f(-W * 1.05)},${f(-(H - 5))} 0,${f(-H)}C${f(W * 1.05)},${f(-(H - 5))} ${f(W * 1.1)},-4 0,-1Z`
+            );
+            this.budInner.setAttribute("opacity", f(1 - sstep(0.04, 0.3, this.b)));
+            const P0 = [0, -1],
+              P1 = [-W * 1.28, -4],
+              P2 = [-W * 1.2, -(H - 5)],
+              P3 = [0, -(H + 1.2)];
+            const sepD = `M0,-1C${f(P1[0])},${f(P1[1])} ${f(P2[0])},${f(P2[1])} 0,${f(P3[1])}C${f(-W * 0.25)},${f(-(H - 7))} ${f(-W * 0.2)},-6 0,-1Z`;
+            let hairs = "";
+            for (let j = 0; j < 8; j++) {
+              const tt = 0.12 + j * 0.1;
+              const q = bez(P0, P1, P2, P3, tt),
+                q2 = bez(P0, P1, P2, P3, tt + 0.01);
+              let nx = q2[1] - q[1],
+                ny = -(q2[0] - q[0]);
+              if (nx > 0) {
+                nx = -nx;
+                ny = -ny;
+              }
+              const nl = Math.hypot(nx, ny) || 1;
+              hairs += `M${f(q[0])},${f(q[1])}l${f((nx / nl) * 1.7)},${f((ny / nl) * 1.7 - 0.6)}`;
+            }
+            this.sepLp.setAttribute("d", sepD);
+            this.sepLh.setAttribute("d", hairs);
+            this.sepRp.setAttribute("d", sepD);
+            this.sepRh.setAttribute("d", hairs);
+            this.sepL.setAttribute("transform", `rotate(${f(-open * 30)} 0 -1)`);
+            this.sepR.setAttribute("transform", `rotate(${f(open * 30)} 0 -1) scale(-1,1)`);
+            const hide = this.sepalsDropped ? "none" : "";
+            this.sepL.style.display = hide;
+            this.sepR.style.display = hide;
+            this.budG.setAttribute(
+              "transform",
+              `translate(${f(tip[0])},${f(tip[1])}) rotate(${f(a * R2D + 90)}) scale(${f(bs)})`
+            );
+            this.budState = { tip, a, bs, open, sepD };
+          }
+          dropSepals() {
+            this.sepalsDropped = true;
+            const st = this.budState;
+            if (!st) return;
+            [-1, 1].forEach((side) => {
+              const el = E("path", { d: st.sepD, fill: side < 0 ? "#5A7641" : "#52703B" });
+              this.addParticle({
+                type: "sepal",
+                el,
+                x: st.tip[0],
+                y: st.tip[1],
+                vx: side * (20 + Math.random() * 25),
+                vy: -25 - Math.random() * 15,
+                rot: st.a * R2D + 90 + side * st.open * 30,
+                vr: side * (70 + Math.random() * 80),
+                sx: side < 0 ? 1 : -1,
+                sc: st.bs,
+                life: 5,
+                fade: 1.2,
+                seed: Math.random() * 10,
+              });
+            });
+          }
+
+          // ------------------------------------------------------------ flower
+          drawFlower(g, stem) {
+            const bc = Math.max(0, this.b),
+              ex = this.phase === "expanding";
+            if (!stem || (bc < 0.003 && !ex)) {
+              if (this.flowerVis) {
+                this.flowerG.style.display = "none";
+                this.flowerVis = false;
+              }
+              if (this.b < 0.02) {
+                this.sepalsDropped = false;
+                this.pollenDone = false;
+              }
+              return;
+            }
+            if (!this.flowerVis) {
+              this.flowerG.style.display = "";
+              this.flowerVis = true;
+            }
+            const tip = stem.pts[stem.pts.length - 1],
+              a = tip[2];
+            if (!this.sepalsDropped && bc > 0.06) this.dropSepals();
+            let cx = tip[0] + Math.cos(a) * 2,
+              cy = tip[1] + Math.sin(a) * 2;
+            if (!this.pollenDone && bc > 0.75) {
+              this.pollenDone = true;
+              this.emitPollen(cx, cy);
+            }
+            const bb = Math.min(bc, 1.3);
+            const R = lerp(15, 38, bb),
+              W = lerp(5, 24, bb);
+            const tipDeg = a * R2D,
+              tilt = (tipDeg + 90) * 0.5;
+            for (let i = 0; i < this.petals.length; i++) {
+              const P = this.petals[i];
+              const budAng = tipDeg + (P.idx - 2.5) * 5 - tilt;
+              const diff = ((((P.base - budAng) % 360) + 540) % 360) - 180;
+              const ang =
+                budAng + diff * bc + Math.sin(this.t * 1.5 + P.idx * 1.3) * 1.1 * Math.min(bc, 1);
+              const ri = R * P.k,
+                wi = W * P.kw;
+              P.g.setAttribute("transform", `rotate(${f(ang + 90)})`);
+              P.path.setAttribute("d", petalD(ri, wi));
+              P.vein.setAttribute("d", petalVeinD(ri, wi));
+            }
+            let S = 1,
+              rot = 0,
+              centerFade = 1;
+            if (ex) {
+              cx = this.exp.cx;
+              cy = this.exp.cy;
+              const e = this.e,
+                u = sstep(0, 1, e);
+              S =
+                Math.exp(u * Math.log(this.exp.Smax)) *
+                (1 - 0.07 * Math.sin(clamp(e / 0.18) * Math.PI));
+              rot = u * 38;
+              centerFade = 1 - sstep(0.05, 0.4, e);
+              this.washC.setAttribute("opacity", f(sstep(0.02, 0.12, e)));
+            } else this.washC.setAttribute("opacity", 0);
+            this.washC.setAttribute("r", f(R * 0.8));
+            this.centerG.setAttribute("transform", `scale(${f(clamp(bc, 0, 1.2))})`);
+            this.centerG.setAttribute("opacity", f(sstep(0.15, 0.6, bc) * centerFade));
+            this.faceG.setAttribute(
+              "transform",
+              `rotate(${f(tilt)}) scale(${FLOWER_SIZE},${f(FLOWER_SIZE * 0.9)})`
+            );
+            this.flowerG.setAttribute(
+              "transform",
+              `translate(${f(cx)},${f(cy)}) rotate(${f(rot)}) scale(${f(S)})`
+            );
+            this.flowerPos = { cx, cy, R };
+          }
+
+          // ------------------------------------------------------------ transition
+          updateTransition(dt) {
+            if (this.phase === "growing") {
+              const want = (this.mode === "auto" && this.p >= 1) || this.forceTransition;
+              if (!want) this.expandAt = null;
+              else if (
+                this.expandAt == null &&
+                this.flowerPos &&
+                Math.abs(this.b - 1) < 0.03 &&
+                Math.abs(this.bv) < 0.2
+              )
+                this.expandAt = this.t + 0.8;
+              if (this.expandAt != null && this.t >= this.expandAt) this.startExpand();
+            } else if (this.phase === "expanding") {
+              this.e = Math.min(1, this.e + dt / (this.reduced ? 0.8 : 1.5));
+              const e = this.e;
+              this.rest.style.opacity = f(1 - sstep(0.25, 0.6, e));
+              this.label.style.opacity = f(1 - sstep(0, 0.18, e));
+              this.washEl.style.opacity = f(sstep(0.78, 0.97, e));
+              if (e >= 1) {
+                this.phase = "done";
+                this.washEl.style.opacity = 1;
+                const end = this.stats.end != null ? this.stats.end : this.exp.t;
+                this.cb.onDone &&
+                  this.cb.onDone({
+                    seconds: Math.max(0, end - (this.stats.start ?? end)),
+                    roots: this.stats.roots,
+                    leaves: this.stats.leaves,
+                    drops: this.stats.drops,
+                  });
+              }
+            }
+          }
+          startExpand() {
+            const { cx, cy, R } = this.flowerPos;
+            const fx = this.ox + cx * this.s,
+              fy = this.oy + cy * this.s;
+            const dist = Math.max(
+              Math.hypot(fx, fy),
+              Math.hypot(this.vw - fx, fy),
+              Math.hypot(fx, this.vh - fy),
+              Math.hypot(this.vw - fx, this.vh - fy)
+            );
+            this.exp = {
+              cx,
+              cy,
+              Smax: (dist / (this.s * 0.8 * R * 0.9 * FLOWER_SIZE)) * 1.12,
+              t: this.t,
+            };
+            this.phase = "expanding";
+            this.e = 0;
+            this.cb.onExpand && this.cb.onExpand();
+          }
+
+          // ------------------------------------------------------------ particles
+          addParticle(o) {
+            if (!o.el) o.el = E("circle", { r: o.r, fill: o.fill });
+            this.partG.appendChild(o.el);
+            o.maxLife = o.life;
+            this.particles.push(o);
+          }
+          emitCrumbs(x, y, n, power) {
+            for (let i = 0; i < n; i++) {
+              const r = 0.6 + Math.random() * 1.1;
+              this.addParticle({
+                type: "crumb",
+                x: x + (Math.random() - 0.5) * 6,
+                y: y - 1,
+                r,
+                vx: (Math.random() - 0.5) * 120 * power,
+                vy: -(30 + Math.random() * 95) * power,
+                grav: 430,
+                life: 1.4 + Math.random() * 1.2,
+                fade: 0.6,
+                fill: Math.random() < 0.5 ? "#5E4433" : "#7A5C45",
+                rot: 0,
+                bounced: 0,
+              });
+            }
+          }
+          emitPollen(x, y) {
+            if (this.reduced) return;
+            for (let i = 0; i < 9; i++) {
+              this.addParticle({
+                type: "pollen",
+                x: x + (Math.random() - 0.5) * 14,
+                y: y + (Math.random() - 0.5) * 10,
+                r: 0.5 + Math.random() * 0.5,
+                vx: (Math.random() - 0.5) * 14,
+                vy: -6 - Math.random() * 12,
+                life: 2.4 + Math.random() * 1.2,
+                fade: 1,
+                fill: "#F2E6CF",
+                seed: Math.random() * 10,
+              });
+            }
+          }
+          splash(x, y, n) {
+            for (let i = 0; i < n; i++) {
+              this.addParticle({
+                type: "splash",
+                x,
+                y,
+                r: 0.5 + Math.random() * 0.6,
+                vx: (Math.random() - 0.5) * 80,
+                vy: -(35 + Math.random() * 60),
+                grav: 420,
+                life: 0.45 + Math.random() * 0.25,
+                fade: 0.3,
+                fill: "#B9D3DD",
+              });
+            }
+          }
+          updateParticles(dt) {
+            const t = this.t;
+            for (let i = this.particles.length - 1; i >= 0; i--) {
+              const p = this.particles[i];
+              p.life -= dt;
+              if (p.life <= 0) {
+                p.el.remove();
+                this.particles.splice(i, 1);
+                continue;
+              }
+              if (!p.settled) {
+                if (p.type === "pollen") {
+                  p.vx += Math.sin(t * 2 + p.seed) * 10 * dt;
+                  p.vy -= 3 * dt;
+                } else if (p.type === "sepal") {
+                  p.vy = Math.min(p.vy + 110 * dt, 80);
+                  p.vx = (p.vx + Math.sin(t * 2.4 + p.seed) * 60 * dt) * 0.985;
+                  p.rot += p.vr * dt;
+                  p.vr *= 0.995;
+                } else p.vy += p.grav * dt;
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                if (p.type === "crumb" || p.type === "sepal") {
+                  const sy = this.surfaceY(p.x);
+                  if (isFinite(sy) && p.vy > 0 && p.y >= sy - (p.r || 1)) {
+                    p.y = sy - (p.r || 1);
+                    if (p.type === "crumb" && p.bounced < 1 && p.vy > 40) {
+                      p.vy *= -0.32;
+                      p.vx *= 0.6;
+                      p.bounced++;
+                    } else {
+                      p.settled = true;
+                      p.life = Math.min(p.life, p.type === "sepal" ? 2.2 : 1.2);
+                    }
+                  }
+                }
+              }
+              const op = clamp(p.life / p.fade);
+              p.el.setAttribute("opacity", f(op));
+              const sc = p.sc || 1;
+              p.el.setAttribute(
+                "transform",
+                `translate(${f(p.x)},${f(p.y)}) rotate(${f(p.rot || 0)}) scale(${f(sc * (p.sx || 1))},${f(sc)})`
+              );
+            }
+          }
+
+          // ------------------------------------------------------------ water
+          updateDrops(dt) {
+            if (
+              this.phase === "growing" &&
+              !this.reduced &&
+              this.g > 0.1 &&
+              this.t > this.nextDrop
+            ) {
+              this.spawnDrop();
+              this.nextDrop = this.t + 3.4 + Math.random() * 4.8;
+            }
+            for (let i = this.drops.length - 1; i >= 0; i--) {
+              const d = this.drops[i];
+              d.age += dt;
+              d.vy = Math.min(d.vy + 560 * dt, 300);
+              const py = d.y;
+              d.y += d.vy * dt;
+              let hit = false;
+              for (const lf of this.leaves) {
+                if (!lf.vis || !lf.world || lf.world.grow < 0.5) continue;
+                const w = lf.world,
+                  ex = Math.cos(w.a) * w.len,
+                  ey = Math.sin(w.a) * w.len;
+                const tt = clamp(((d.x - w.x) * ex + (d.y - w.y) * ey) / (ex * ex + ey * ey));
+                const qx = w.x + ex * tt,
+                  qy = w.y + ey * tt;
+                if (tt > 0.2 && Math.abs(d.x - qx) < 4 && py <= qy + 2 && d.y >= qy - 3) {
+                  this.splash(qx, qy - 1, 4);
+                  lf.vel += lf.side * 120;
+                  this.stats.drops++;
+                  hit = true;
+                  break;
+                }
+              }
+              if (!hit) {
+                const sy = this.surfaceY(d.x);
+                if (isFinite(sy) && d.y >= sy) {
+                  this.splash(d.x, sy - 0.5, 4);
+                  this.wetSpot(d.x, sy);
+                  hit = true;
+                } else if (d.y > 220) hit = true;
+              }
+              if (hit) {
+                d.el.remove();
+                this.drops.splice(i, 1);
+                continue;
+              }
+              d.el.setAttribute("opacity", f(sstep(0, 0.35, d.age) * 0.9));
+              d.el.setAttribute(
+                "transform",
+                `translate(${f(d.x)},${f(d.y)}) scale(1,${f(1 + d.vy / 800)})`
+              );
+            }
+            for (let i = this.wets.length - 1; i >= 0; i--) {
+              const w = this.wets[i];
+              w.life -= dt;
+              if (w.life <= 0) {
+                w.el.remove();
+                this.wets.splice(i, 1);
+                continue;
+              }
+              w.el.setAttribute(
+                "opacity",
+                f(0.32 * sstep(0, 1.5, w.life) * sstep(4.5, 4.2, w.life))
+              );
+            }
+          }
+          spawnDrop() {
+            const tipX = this.stem ? this.stem.pts[this.stem.pts.length - 1][0] : 0;
+            const x = tipX + (Math.random() - 0.5) * 130;
+            const y = -this.oy / this.s - 10;
+            const el = E("g", {}, this.partG);
+            E(
+              "path",
+              {
+                d: "M0,-4.2C1.5,-1.6 2.3,-0.2 2.3,1A2.3,2.3 0 1 1 -2.3,1C-2.3,-0.2 -1.5,-1.6 0,-4.2Z",
+                fill: "#A9C6D3",
+              },
+              el
+            );
+            E("ellipse", { cx: -0.8, cy: 0.6, rx: 0.5, ry: 0.9, fill: "#fff", opacity: 0.75 }, el);
+            this.drops.push({ x, y, vy: 20, age: 0, el });
+          }
+          wetSpot(x, y) {
+            const el = E(
+              "ellipse",
+              { cx: f(x), cy: f(y + 6), rx: 11, ry: 7, fill: "#1E140D", opacity: 0 },
+              this.wetG
+            );
+            this.wets.push({ el, life: 4.5 });
+          }
+
+          // ------------------------------------------------------------ label
+          updateLabel(g) {
+            const y = this.oy + 146 * this.s;
+            this.label.style.transform = `translate3d(${f(this.ox)}px,${f(y)}px,0) translateX(-50%)`;
+            const pct = Math.min(100, Math.round(g * 100));
+            if (pct !== this.lastPct) {
+              this.lastPct = pct;
+              this.numEl.textContent = pct + "%";
+              this.wordEl.textContent = pct >= 100 ? "Grown." : "Growing...";
+            }
+            const st = Garden.stageName(g, this.b);
+            if (st !== this.lastStage) {
+              this.lastStage = st;
+              this.stageEl.textContent = st;
+            }
+          }
+          static stageName(g, b) {
+            if (g < 0.02) return "seed, waiting";
+            if (g < 0.09) return "seed settling";
+            if (g < 0.3) return "roots branching";
+            if (g < 0.5) return "shoot breaking through";
+            if (g < 0.7) return "leaves unfolding";
+            if (g < 0.9) return "bud forming";
+            if (g < 0.999 || (b != null && b < 0.5)) return "about to bloom";
+            return "in bloom";
+          }
+        }
+        window.Garden = Garden;
+      })();
+    </script>
+
+    <script type="text/babel" data-presets="react">
+      const { useEffect, useRef, useState, useCallback } = React;
+
+      const prefersReduced = () =>
+        window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      function AnemoneArt() {
+        const petal = (R, W) =>
+          `M0,0C${-W * 0.55},${-R * 0.16} ${-W * 1.02},${-R * 0.58} ${-W * 0.66},${-R * 0.9}C${-W * 0.36},${-R * 1.1} ${W * 0.36},${-R * 1.1} ${W * 0.66},${-R * 0.9}C${W * 1.02},${-R * 0.58} ${W * 0.55},${-R * 0.16} 0,0Z`;
+        return (
+          <svg
+            viewBox="-100 -100 200 200"
+            aria-hidden="true"
+            className="bloom-art pointer-events-none absolute top-1/2 -right-[30vmin] sm:-right-[16vmin] w-[110vmin] h-[110vmin] opacity-[0.13]"
+          >
+            <g fill="none" stroke="#FBF3E8" strokeWidth="0.45">
+              {[0, 2, 4, 1, 3, 5].map((i) => (
+                <g key={i} transform={`rotate(${i * 60 + 12})`}>
+                  <path d={petal(i % 2 ? 80 : 88, i % 2 ? 50 : 55)} />
+                  <path d={`M0,-3Q-8,-40 -12,-72M0,-3L0,-80M0,-3Q8,-40 12,-72`} opacity=".6" />
+                </g>
+              ))}
+              <circle r="16" />
+              {Array.from({ length: 36 }).map((_, k) => {
+                const a = (k / 36) * Math.PI * 2,
+                  r2 = 24 + (k % 3) * 2;
+                return (
+                  <g key={k}>
+                    <line
+                      x1={Math.cos(a) * 16}
+                      y1={Math.sin(a) * 16}
+                      x2={Math.cos(a) * r2}
+                      y2={Math.sin(a) * r2}
+                    />
+                    <circle cx={Math.cos(a) * r2} cy={Math.sin(a) * r2} r="1.2" />
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
+        );
+      }
+
+      function Destination({ stats, onReplay, destRef }) {
+        const secs = stats ? stats.seconds.toFixed(1) : "—";
+        const rows = [
+          [secs, "s", "in the soil"],
+          [stats ? stats.roots : "—", "", "roots branched"],
+          [stats ? stats.leaves : "—", "", "leaves unfurled"],
+          [
+            stats ? stats.drops : "—",
+            "",
+            stats && stats.drops === 1 ? "droplet caught on a leaf" : "droplets caught on leaves",
+          ],
+        ];
+        return (
+          <main
+            ref={destRef}
+            className="dest grain fixed inset-0 z-30 overflow-y-auto overflow-x-hidden"
+            aria-labelledby="dest-title"
+          >
+            <AnemoneArt />
+            <div className="relative z-[2] min-h-full max-w-[1240px] mx-auto px-6 sm:px-10 lg:px-14 py-[clamp(1rem,3vh,2rem)] flex flex-col">
+              <div className="flex-1 grid lg:grid-cols-12 gap-[clamp(1.5rem,5vh,3.5rem)] lg:gap-8 items-end pt-[clamp(1rem,4vh,3rem)] pb-[clamp(2.5rem,11vh,7.5rem)]">
+                <section className="lg:col-span-8">
+                  <h1
+                    id="dest-title"
+                    className="display text-[clamp(3rem,min(11.5vw,17vh),9.75rem)] leading-[0.9] tracking-[-0.035em] font-[380]"
+                  >
+                    <span className="line">
+                      <span style={{ "--d": ".35s" }}>You waited.</span>
+                    </span>
+                    <span className="line">
+                      <span className="italic font-[300]" style={{ "--d": ".5s" }}>
+                        It grew.
+                      </span>
+                    </span>
+                  </h1>
+                  <p
+                    className="rise mt-[clamp(1rem,4.5vh,3rem)] max-w-[33rem] text-[1.06rem] sm:text-[1.15rem] leading-relaxed text-cream/90"
+                    style={{ "--d": ".75s" }}
+                  >
+                    No bar filled up. An anemone put down {stats ? stats.roots : "its"} roots,
+                    unfolded its leaves and opened, and that was how you knew this page was on its
+                    way.
+                    <span className="display italic text-cream">
+                      {" "}
+                      The plant growing isn't a picture of the loading. It is the loading.
+                    </span>
+                  </p>
+                  <div
+                    className="rise mt-[clamp(1rem,3.5vh,2.5rem)] flex flex-wrap items-center gap-3"
+                    style={{ "--d": ".9s" }}
+                  >
+                    <button
+                      onClick={onReplay}
+                      className="btn-cream group inline-flex items-center gap-3 rounded-full bg-cream text-poppy-deep pl-5 pr-6 py-3.5 text-[15px] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cream/40"
+                    >
+                      <svg
+                        className="replay-icon"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 20 20"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M4.5 10a5.5 5.5 0 1 0 1.8-4.07"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                          strokeLinecap="round"
+                        />
+                        <path
+                          d="M3.6 3.4l.4 3.5 3.5-.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <ellipse
+                          cx="10"
+                          cy="10"
+                          rx="1.5"
+                          ry="2.2"
+                          fill="currentColor"
+                          transform="rotate(20 10 10)"
+                        />
+                      </svg>
+                      Replay growth
+                    </button>
+                  </div>
+                </section>
+
+                <aside className="lg:col-span-4" aria-label="This growth, by the numbers">
+                  <dl>
+                    {rows.map(([v, unit, label], i) => (
+                      <div
+                        key={label}
+                        className="rise flex items-baseline justify-between gap-6 border-t border-cream/25 py-[clamp(0.5rem,1.8vh,1rem)]"
+                        style={{ "--d": `${1 + i * 0.09}s` }}
+                      >
+                        <dt className="mono text-[10.5px] uppercase tracking-[0.18em] text-cream/70 order-2 text-right">
+                          {label}
+                        </dt>
+                        <dd className="display text-[clamp(28px,4.5vh,40px)] leading-none tabular-nums tracking-tight order-1">
+                          {v}
+                          <span className="text-[20px] text-cream/70">{unit}</span>
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </aside>
+              </div>
+            </div>
+          </main>
+        );
+      }
+
+      function App() {
+        const svgRef = useRef(null),
+          labelRef = useRef(null),
+          wordRef = useRef(null),
+          numRef = useRef(null),
+          stageRef = useRef(null);
+        const washRef = useRef(null),
+          destRef = useRef(null),
+          engRef = useRef(null);
+        const [phase, setPhase] = useState("loading"); // loading | expanding | done | rewinding
+        const [prog, setProg] = useState(0);
+        const [mode, setMode] = useState("auto");
+        const [paused, setPaused] = useState(false);
+        const [speed, setSpeed] = useState(1);
+        const [stats, setStats] = useState(null);
+
+        useEffect(() => {
+          const eng = new window.Garden({
+            svg: svgRef.current,
+            label: labelRef.current,
+            word: wordRef.current,
+            num: numRef.current,
+            stage: stageRef.current,
+            wash: washRef.current,
+            onProgress: (p) => setProg(p),
+            onExpand: () => setPhase("expanding"),
+            onDone: (s) => {
+              setStats(s);
+              setPhase("done");
+            },
+          });
+          engRef.current = eng;
+          window.__garden = eng; // handy for poking at growth states from devtools
+          eng.start();
+          return () => {
+            eng.destroy();
+          };
+        }, []);
+
+        const replay = useCallback(
+          (manual) => (e) => {
+            const eng = engRef.current;
+            const reduced = prefersReduced();
+            const dur = reduced ? 300 : 1000;
+            eng.restart({ hold: dur, mode: manual ? "manual" : "auto" });
+            setMode(manual ? "manual" : "auto");
+            setPaused(false);
+            setProg(0);
+            setPhase("rewinding");
+            const el = destRef.current;
+            const r = e && e.currentTarget ? e.currentTarget.getBoundingClientRect() : null;
+            const x = r ? r.left + r.width / 2 : innerWidth / 2,
+              y = r ? r.top + r.height / 2 : innerHeight / 2;
+            if (el && el.animate) {
+              const frames = reduced
+                ? [{ opacity: 1 }, { opacity: 0 }]
+                : [
+                    { clipPath: `circle(150% at ${x}px ${y}px)` },
+                    { clipPath: `circle(0px at ${x}px ${y}px)` },
+                  ];
+              const anim = el.animate(frames, {
+                duration: dur,
+                easing: "cubic-bezier(.7,0,.25,1)",
+                fill: "forwards",
+              });
+              const finish = () => setPhase((p) => (p === "rewinding" ? "loading" : p));
+              anim.onfinish = finish;
+              setTimeout(finish, dur + 150); // fallback if the animation is throttled
+            } else setPhase("loading");
+          },
+          []
+        );
+
+        const pct = Math.round(prog * 100);
+        const showDest = phase === "done" || phase === "rewinding";
+
+        return (
+          <>
+            <div
+              className="loader-bg grain fixed inset-0 z-20 overflow-hidden"
+              aria-hidden={showDest}
+            >
+              <svg ref={svgRef} className="absolute inset-0 w-full h-full" aria-hidden="true" />
+              <div
+                role="progressbar"
+                aria-label="Loading page"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={pct}
+                aria-valuetext={`Growing, ${pct} percent — ${window.Garden.stageName(prog, prog >= 1 ? 1 : 0)}`}
+                className="sr-only"
+              />
+              <div ref={labelRef} className="gw-label" aria-hidden="true">
+                <div>
+                  <span ref={wordRef} className="word">
+                    Growing...
+                  </span>
+                  <span ref={numRef} className="num">
+                    0%
+                  </span>
+                </div>
+                <div ref={stageRef} className="stage">
+                  seed, waiting
+                </div>
+              </div>
+              <header className="absolute z-[2] top-0 left-0 px-6 sm:px-14 pt-6 sm:pt-8 text-[#5B5847]">
+                <h2 className="display italic font-[400] text-[clamp(2rem,4vw,2.6rem)] leading-tight tracking-[-0.005em]">
+                  Grow While You Wait
+                </h2>
+                <span className="block mt-4 h-px w-14 bg-current opacity-70" aria-hidden="true" />
+                <p className="display italic font-[400] mt-6 max-w-[11rem] text-[17px] leading-[1.3] tracking-[0.2em]">
+                  A quiet animation for brighter possibilities.
+                </p>
+              </header>
+              <div className="absolute z-[2] bottom-5 left-5 sm:left-8 mono text-[10px] uppercase tracking-[0.22em] text-muted/90">
+                Fig 01
+              </div>
+              <div className="absolute z-[2] bottom-5 right-5 sm:right-8 text-right mono text-[10px] uppercase tracking-[0.22em] text-muted/90 hidden sm:block">
+                Specimen ·{" "}
+                <span className="display normal-case italic tracking-normal text-[13px]">
+                  Anemone coronaria
+                </span>
+              </div>
+              <div
+                ref={washRef}
+                className="absolute inset-0 z-[3] bg-poppy pointer-events-none"
+                style={{ opacity: 0 }}
+              />
+            </div>
+
+            {showDest && <Destination stats={stats} destRef={destRef} onReplay={replay(false)} />}
+          </>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
